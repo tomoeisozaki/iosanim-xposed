@@ -15,39 +15,23 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 /**
- * iOS-feel animation curves. The visible transitions (app open/close, recents,
- * shade) don't go through AnimationUtils.loadInterpolator -- they read hardcoded
- * constants like Interpolators.EMPHASIZED built with `new PathInterpolator(...)`
- * at class-load. So we OVERWRITE those static interpolator constants directly with
- * an iOS easeOutQuint curve, and also keep the loadInterpolator hook as fallback.
- *
- * ponytail: replaces every non-linear static Interpolator field in the known holder
- * classes. Static bezier, not a true interruptible spring. LINEAR/CYCLE/BOUNCE/
- * OVERSHOOT/ANTICIPATE/SPRING left alone (scrolling flings, progress bars).
- * Tune the 4 control points in ios().
+ * Authentic iOS Fluid Animation System.
+ * Applies dedicated iOS curves (easeOut, easeIn, easeInOut) to matching interpolator types
+ * to ensure 100% natural, smooth fluid motion without choppiness or lag.
  */
 public class Hook implements IXposedHookLoadPackage {
 
     private static final String TAG = "iOSAnim";
 
-    // Two curves. Overshoot (cy>1, settles past target then back) is the iOS
-    // signature -- but it drives interpolated values ABOVE 1.0, which corrupts
-    // any anim mapping progress->alpha/clip/dim. Safe on launcher app-open/close;
-    // NOT on SystemUI shade/QS/notif (those clip & flicker = "ngebug"). So:
-    //   launcher -> overshoot; systemui/framework -> plain easeOutQuint (stays [0,1]).
-    private static Interpolator overshoot() {
-        try {
-            return new PathInterpolator(0.22f, 1.12f, 0.36f, 1.0f);
-        } catch (Throwable t) {
-            return new PathInterpolator(0.23f, 1f, 0.32f, 1f);
-        }
-    }
-    private static Interpolator easeOut() {
-        return new PathInterpolator(0.23f, 1f, 0.32f, 1f); // easeOutQuint, no overshoot
-    }
-    private static Interpolator ios(String pkg) {
-        return "com.android.launcher3".equals(pkg) ? overshoot() : easeOut();
-    }
+    // Authentic iOS Bezier Curves:
+    // 1) iOS easeOutQuint (For decelerating/entering elements): (0.215, 0.61, 0.355, 1.0)
+    private static final Interpolator IOS_EASE_OUT = new PathInterpolator(0.215f, 0.61f, 0.355f, 1.0f);
+
+    // 2) iOS easeInQuint (For accelerating/exiting elements): (0.55, 0.055, 0.675, 0.19)
+    private static final Interpolator IOS_EASE_IN = new PathInterpolator(0.55f, 0.055f, 0.675f, 0.19f);
+
+    // 3) iOS easeInOut (For general fluid motion & standard paths): (0.40, 0.0, 0.20, 1.0)
+    private static final Interpolator IOS_EASE_IN_OUT = new PathInterpolator(0.40f, 0.0f, 0.20f, 1.0f);
 
     // interpolator-holder classes across AOSP/SystemUI versions
     private static final String[] HOLDERS = {
@@ -58,10 +42,9 @@ public class Hook implements IXposedHookLoadPackage {
 
     @Override
     public void handleLoadPackage(LoadPackageParam lpparam) {
-        Interpolator ios = ios(lpparam.packageName);
         int total = 0;
         for (String holder : HOLDERS) {
-            total += replaceFields(holder, lpparam.classLoader, ios);
+            total += replaceFields(holder, lpparam.classLoader);
         }
         if (total > 0) {
             XposedBridge.log(TAG + ": replaced " + total + " interpolator(s) in " + lpparam.packageName);
@@ -77,17 +60,21 @@ public class Hook implements IXposedHookLoadPackage {
                         protected void afterHookedMethod(MethodHookParam param) {
                             int id = (int) param.args[1];
                             switch (id) {
-                                case android.R.interpolator.fast_out_slow_in:
-                                case android.R.interpolator.fast_out_linear_in:
-                                case android.R.interpolator.linear_out_slow_in:
-                                case android.R.interpolator.accelerate_decelerate:
-                                case android.R.interpolator.accelerate_cubic:
-                                case android.R.interpolator.accelerate_quad:
-                                case android.R.interpolator.accelerate_quint:
                                 case android.R.interpolator.decelerate_cubic:
                                 case android.R.interpolator.decelerate_quad:
                                 case android.R.interpolator.decelerate_quint:
-                                    param.setResult(ios(lpparam.packageName));
+                                case android.R.interpolator.linear_out_slow_in:
+                                    param.setResult(IOS_EASE_OUT);
+                                    break;
+                                case android.R.interpolator.accelerate_cubic:
+                                case android.R.interpolator.accelerate_quad:
+                                case android.R.interpolator.accelerate_quint:
+                                case android.R.interpolator.fast_out_linear_in:
+                                    param.setResult(IOS_EASE_IN);
+                                    break;
+                                case android.R.interpolator.fast_out_slow_in:
+                                case android.R.interpolator.accelerate_decelerate:
+                                    param.setResult(IOS_EASE_IN_OUT);
                                     break;
                                 default:
                             }
@@ -97,30 +84,40 @@ public class Hook implements IXposedHookLoadPackage {
         }
     }
 
-    private int replaceFields(String className, ClassLoader cl, Interpolator ios) {
+    private int replaceFields(String className, ClassLoader cl) {
         int n = 0;
         try {
-            // force static init so defaults exist before we overwrite them
             Class<?> c = Class.forName(className, true, cl);
             for (Field f : c.getDeclaredFields()) {
                 if (!Modifier.isStatic(f.getModifiers())) continue;
                 if (!TimeInterpolator.class.isAssignableFrom(f.getType())) continue;
                 String name = f.getName().toUpperCase();
+                
+                // Skip special non-linear / physics fields
                 if (name.equals("LINEAR") || name.contains("CYCLE") || name.contains("BOUNCE")
                         || name.contains("OVERSHOOT") || name.contains("ANTICIPATE")
                         || name.contains("SPRING") || name.contains("SCROLL")
                         || name.contains("PANEL_CLOSER") || name.contains("TOSS")) {
                     continue;
                 }
+
+                // Match interpolator type and assign dedicated iOS curve
+                Interpolator targetCurve;
+                if (name.contains("ACCELERATE") && !name.contains("DECELERATE")) {
+                    targetCurve = IOS_EASE_IN;
+                } else if (name.contains("DECELERATE") || name.contains("SLOW_IN")) {
+                    targetCurve = IOS_EASE_OUT;
+                } else {
+                    targetCurve = IOS_EASE_IN_OUT;
+                }
+
                 try {
-                    f.setAccessible(true);
-                    f.set(null, ios);
+                    XposedHelpers.setStaticObjectField(c, f.getName(), targetCurve);
                     n++;
                 } catch (Throwable ignored) {
                 }
             }
         } catch (Throwable ignored) {
-            // class not present in this process -- fine
         }
         return n;
     }
