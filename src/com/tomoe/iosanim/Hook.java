@@ -23,15 +23,15 @@ public class Hook implements IXposedHookLoadPackage {
 
     private static final String TAG = "iOSAnim";
 
-    // Authentic iOS Bezier Curves:
-    // 1) iOS easeOutQuint (For decelerating/entering elements): (0.215, 0.61, 0.355, 1.0)
-    private static final Interpolator IOS_EASE_OUT = new PathInterpolator(0.215f, 0.61f, 0.355f, 1.0f);
+    // Tuned iOS Fast & Fluid Curves (Snappy + Smooth + Zero Framedrop):
+    // 1) Fast iOS Ease-Out (Entering/Decelerating): (0.22, 0.45, 0.25, 1.0) - Fast response with smooth tail
+    private static final Interpolator IOS_EASE_OUT = new PathInterpolator(0.22f, 0.45f, 0.25f, 1.0f);
 
-    // 2) iOS easeInQuint (For accelerating/exiting elements): (0.55, 0.055, 0.675, 0.19)
-    private static final Interpolator IOS_EASE_IN = new PathInterpolator(0.55f, 0.055f, 0.675f, 0.19f);
+    // 2) Fast iOS Ease-In (Exiting/Accelerating): (0.45, 0.0, 0.55, 0.3) - Dynamic exit without lingering
+    private static final Interpolator IOS_EASE_IN = new PathInterpolator(0.45f, 0.0f, 0.55f, 0.30f);
 
-    // 3) iOS easeInOut (For general fluid motion & standard paths): (0.40, 0.0, 0.20, 1.0)
-    private static final Interpolator IOS_EASE_IN_OUT = new PathInterpolator(0.40f, 0.0f, 0.20f, 1.0f);
+    // 3) Fast iOS Ease-In-Out (General Fluid Motion): (0.30, 0.0, 0.15, 1.0) - Prompt start & clean finish
+    private static final Interpolator IOS_EASE_IN_OUT = new PathInterpolator(0.30f, 0.0f, 0.15f, 1.0f);
 
     // interpolator-holder classes across AOSP/SystemUI versions
     private static final String[] HOLDERS = {

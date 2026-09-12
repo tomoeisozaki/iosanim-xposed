@@ -32,9 +32,9 @@ Because these constants are declared as `public static final`, standard Java ref
 
 | Curve Name | Control Points $(P_1, P_2)$ | Target Interpolators | Motion Characteristics |
 | :--- | :--- | :--- | :--- |
-| **`IOS_EASE_OUT`** | `(0.215, 0.61, 0.355, 1.0)` | `DECELERATE`, `SLOW_IN`, `LEGACY_DECELERATE` | Smooth quintic deceleration; progress spreads evenly across 0%–100% of duration without abrupt stopping. |
-| **`IOS_EASE_IN`** | `(0.55, 0.055, 0.675, 0.19)` | `ACCELERATE`, `FAST_OUT_LINEAR_IN` | Dynamic quintic acceleration for exiting windows and dismissing views. |
-| **`IOS_EASE_IN_OUT`** | `(0.40, 0.00, 0.200, 1.0)` | `STANDARD`, `FAST_OUT_SLOW_IN`, `TOUCH_RESPONSE` | S-curve for general layout movement, dialogs, and navigation bounds. |
+| **`IOS_EASE_OUT`** | `(0.22, 0.45, 0.25, 1.0)` | `DECELERATE`, `SLOW_IN`, `LEGACY_DECELERATE` | Fast initial acceleration with a fluid, continuous deceleration tail; zero pixel-jumping or framedrop artifacts. |
+| **`IOS_EASE_IN`** | `(0.45, 0.00, 0.55, 0.3)` | `ACCELERATE`, `FAST_OUT_LINEAR_IN` | Fast dynamic exit without lingering on screen. |
+| **`IOS_EASE_IN_OUT`** | `(0.30, 0.00, 0.15, 1.0)` | `STANDARD`, `FAST_OUT_SLOW_IN`, `TOUCH_RESPONSE` | Prompt, responsive S-curve for general motion paths and navigation gestures. |
 
 > **Note on Shell Transition Compatibility**:
 > On Android 12+ (WM Shell), window bounds and clip rects use linear interpolation (`lerp`). If $y > 1.0$ (overshoot), window clip rect calculations exceed physical screen dimensions, causing sharp window corners and wallpaper flickering. All curves in this module are strictly clamped within $y \in [0.0, 1.0]$ to ensure zero visual glitches.
